@@ -2,22 +2,21 @@ package com.antonitoari.rxlearning.ui;
 
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.ConnectivityManager;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.widget.ImageView;
 
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.util.Arrays;
+import java.util.List;
 
 import com.antonitoari.rxlearning.APIService;
 import com.antonitoari.rxlearning.R;
 import com.antonitoari.rxlearning.models.UserWithImage;
 import com.antonitoari.rxlearning.util.FileManager;
 import com.antonitoari.rxlearning.util.Log;
+import com.antonitoari.rxlearning.util.MD5;
+import com.antonitoari.rxlearning.util.Utils;
 import com.jakewharton.retrofit.Ok3Client;
 
 import okhttp3.OkHttpClient;
@@ -27,8 +26,9 @@ import rx.Observable.OnSubscribe;
 import rx.Subscriber;
 import rx.Subscription;
 import rx.android.observables.AndroidObservable;
-import rx.android.schedulers.AndroidSchedulers;
-import rx.schedulers.Schedulers;
+import rx.functions.Action0;
+import rx.functions.Action1;
+import rx.functions.Func1;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -63,8 +63,8 @@ public class MainActivity extends AppCompatActivity {
         mApiService.findContacts("")
                 .flatMap(userSearchResponse -> Observable.just(userSearchResponse.getEntities().get(0).getProperties()))
                 .flatMap(userProperties -> Observable.just(userProperties.getUrl()))
-                .flatMap(this::getBitmapFromURL)
-                .subscribe(mRxImage::setImageBitmap);
+                .flatMap(Utils::getBitmapFromURL)
+                .subscribe(mRxImage::setImageBitmap, Log::error);
 
 
 //        Observable.zip(mApiService.findContacts("").flatMap(userSearchResponse ->
@@ -78,6 +78,68 @@ public class MainActivity extends AppCompatActivity {
         IntentFilter filter = new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION);
         AndroidObservable.fromBroadcast(getApplicationContext(), filter)
                 .subscribe(this::handleConnectivityChange);
+    }
+
+    private void example1() {
+        Observable<String> obsStr = Observable.create(new OnSubscribe<String>() {
+            @Override
+            public void call(final Subscriber<? super String> subscriber) {
+
+            }
+        });
+
+        obsStr.map(new Func1<String, String>() {
+
+            @Override
+            public String call(final String s) {
+                return MD5.md5(s);
+            }
+        })
+                .map(new Func1<String, Integer>() {
+                    @Override
+                    public Integer call(final String s) {
+                        return s.hashCode();
+                    }
+                })
+                .map(new Func1<Integer, String>() {
+                    @Override
+                    public String call(final Integer integer) {
+                        return String.valueOf(integer);
+                    }
+                })
+                .subscribe(new Action1<String>() {
+            @Override
+            public void call(final String s) {
+
+            }
+        }, new Action1<Throwable>() {
+            @Override
+            public void call(final Throwable throwable) {
+
+            }
+        }, new Action0() {
+            @Override
+            public void call() {
+
+            }
+        });
+    }
+
+    private void example2() {
+        Observable.from("url1", "url2", "url3")
+                .take(5)
+                .filter(new Func1<String, Boolean>() {
+                    @Override
+                    public Boolean call(final String s) {
+                        return s!=null;
+                    }
+                })
+                .subscribe(url -> System.out.println(url));
+    }
+
+    private void example3() {
+        List<String> strings = Arrays.asList("a","b","c");
+        Observable.from(strings).subscribe(Log::log);
     }
 
     private void handleConnectivityChange(Intent intent) {
@@ -101,29 +163,5 @@ public class MainActivity extends AppCompatActivity {
                 .setClient(new Ok3Client(new OkHttpClient.Builder().build()))
                 .setEndpoint(endpoint);
         return builder.build().create(serviceClass);
-    }
-
-    private Observable<Bitmap> getBitmapFromURL(final String src) {
-        return Observable.create(new OnSubscribe<Bitmap>() {
-            @Override
-            public void call(final Subscriber<? super Bitmap> subscriber) {
-                try {
-                    if(subscriber.isUnsubscribed())return;
-                    URL url = new URL(src);
-                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                    connection.setDoInput(true);
-                    connection.connect();
-                    InputStream input = connection.getInputStream();
-                    Bitmap myBitmap = BitmapFactory.decodeStream(input);
-                    if(subscriber.isUnsubscribed())return;
-                    subscriber.onNext(myBitmap);
-                } catch (Exception e) {
-                    if(subscriber.isUnsubscribed())return;
-                    subscriber.onError(e);
-                    Log.error(e);
-                }
-                subscriber.onCompleted();
-            }
-        }).subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread());
     }
 }
